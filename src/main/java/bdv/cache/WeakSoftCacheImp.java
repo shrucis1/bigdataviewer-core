@@ -7,13 +7,13 @@
  * %%
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice,
  *    this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -50,9 +50,9 @@ public class WeakSoftCacheImp< K, V > implements WeakSoftCache< K, V >
 {
 	public static final int MAX_PER_FRAME_FINALIZE_ENTRIES = 500;
 
-	private final ConcurrentHashMap< K, Reference< V > > softReferenceCache = new ConcurrentHashMap<>();
+	protected final ConcurrentHashMap< K, Reference< V > > softReferenceCache = new ConcurrentHashMap<>();
 
-	private final ReferenceQueue< V > finalizeQueue = new ReferenceQueue<>();
+	protected final ReferenceQueue< V > finalizeQueue = new ReferenceQueue<>();
 
 	WeakSoftCacheImp()
 	{}
@@ -107,12 +107,12 @@ public class WeakSoftCacheImp< K, V > implements WeakSoftCache< K, V >
 		}
 	}
 
-	private static interface GetKey< K >
+	protected static interface GetKey< K >
 	{
 		public K getKey();
 	}
 
-	private static class MySoftReference< K, V > extends SoftReference< V > implements GetKey< K >
+	protected static class MySoftReference< K, V > extends SoftReference< V > implements GetKey< K >
 	{
 		private final K key;
 
@@ -129,7 +129,7 @@ public class WeakSoftCacheImp< K, V > implements WeakSoftCache< K, V >
 		}
 	}
 
-	private static class MyWeakReference< K, V > extends WeakReference< V > implements GetKey< K >
+	protected static class MyWeakReference< K, V > extends WeakReference< V > implements GetKey< K >
 	{
 		private final K key;
 

@@ -1,4 +1,4 @@
-/*
+/*-
  * #%L
  * BigDataViewer core classes with minimal dependencies
  * %%
@@ -7,13 +7,13 @@
  * %%
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice,
  *    this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -27,32 +27,58 @@
  * POSSIBILITY OF SUCH DAMAGE.
  * #L%
  */
-package net.imglib2.img.basictypeaccess.volatiles.array;
+package bdv.cache;
 
-import net.imglib2.img.basictypeaccess.array.ArrayDataAccess;
-import net.imglib2.img.basictypeaccess.array.ShortArray;
-import net.imglib2.img.basictypeaccess.volatiles.VolatileAccess;
+import java.lang.ref.Reference;
+
+import net.imglib2.Dirty;
 
 /**
- * A {@link ShortArray} with an {@link #isValid()} flag.
+ * Implementation of {@link WeakSoftCache} for {@link Dirty} values.
  *
- * @author Stephan Saalfeld &lt;saalfelds@janelia.hhmi.org&gt;
- * @author Tobias Pietzsch &lt;tobias.pietzsch@gmail.com&gt;
+ * @param <K>
+ *            key type
+ * @param <V>
+ *            value type
+ *
+ * @author Stephan Saalfeld
  */
-public abstract class AbstractVolatileArray< T extends AbstractVolatileArray< T > > implements ArrayDataAccess< T >, VolatileAccess
+public class DirtyWeakSoftCacheImp< K, V extends Dirty > extends WeakSoftCacheImp< K, V > implements DirtyWeakSoftCache< K, V >
 {
-	private static final long serialVersionUID = -3233057138272085300L;
-	
-	protected final boolean isValid;
+	DirtyWeakSoftCacheImp()
+	{}
 
-	public AbstractVolatileArray( final boolean isValid )
-	{
-		this.isValid = isValid;
-	}
-	
 	@Override
-	public boolean isValid()
+	public void clearAll()
 	{
-		return isValid;
+		for ( final Reference< ? > ref : softReferenceCache.values() )
+			ref.enqueue();
+	}
+
+	/**
+	 * Remove references from the cache that have been garbage-collected.
+	 * To avoid long run-times, per call to {@code cleanUp()}, at most
+	 * {@link #MAX_PER_FRAME_FINALIZE_ENTRIES} are processed.
+	 */
+	@Override
+	public void cleanUp()
+	{
+		synchronized ( softReferenceCache )
+		{
+			for ( int i = 0; i < MAX_PER_FRAME_FINALIZE_ENTRIES; ++i )
+			{
+				final Reference< ? extends V > poll = finalizeQueue.poll();
+				if ( poll == null )
+					break;
+				final Object key = ( ( GetKey< ? > ) poll ).getKey();
+				final Reference< V > ref = softReferenceCache.get( key );
+				if ( ref == poll )
+				{
+					/* TODO persist */
+					System.out.println( key.toString() + ( ref.get().isDirty() ? " is dirty!" : " is not dirty." ) );
+					softReferenceCache.remove( key );
+				}
+			}
+		}
 	}
 }

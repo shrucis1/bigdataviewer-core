@@ -7,13 +7,13 @@
  * %%
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice,
  *    this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -44,13 +44,13 @@ import bdv.cache.CacheControl;
 import bdv.cache.CacheHints;
 import bdv.cache.LoadingStrategy;
 import bdv.img.cache.CachedCellImg;
-import bdv.img.cache.VolatileGlobalCellCache;
+import bdv.img.cache.DirtyVolatileGlobalCellCache;
 import bdv.img.cache.VolatileImgCells;
 import bdv.img.cache.VolatileImgCells.CellCache;
 import mpicbg.spim.data.generic.sequence.ImgLoaderHint;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.img.NativeImg;
-import net.imglib2.img.basictypeaccess.volatiles.array.VolatileByteArray;
+import net.imglib2.img.basictypeaccess.volatiles.array.DirtyVolatileByteArray;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.ARGBType;
@@ -71,7 +71,7 @@ public class OpenConnectomeImageLoader extends AbstractViewerSetupImgLoader< Uns
 
 	private final AffineTransform3D[] mipmapTransforms;
 
-	private final VolatileGlobalCellCache cache;
+	private final DirtyVolatileGlobalCellCache cache;
 
 	private final OpenConnectomeVolatileArrayLoader loader;
 
@@ -88,7 +88,7 @@ public class OpenConnectomeImageLoader extends AbstractViewerSetupImgLoader< Uns
 		blockDimensions = info.getLevelCellDimensions();
 		mipmapTransforms = info.getLevelTransforms( mode );
 
-		cache = new VolatileGlobalCellCache( numScales, 10 );
+		cache = new DirtyVolatileGlobalCellCache( numScales, 10 );
 		System.out.println( info.getOffsets( mode )[ 0 ][ 2 ] + " " + imageDimensions[ 0 ][ 2 ] );
 
 		loader = new OpenConnectomeVolatileArrayLoader(
@@ -216,7 +216,7 @@ public class OpenConnectomeImageLoader extends AbstractViewerSetupImgLoader< Uns
 	@Override
 	public RandomAccessibleInterval< UnsignedByteType > getImage( final int timepointId, final int level, final ImgLoaderHint... hints )
 	{
-		final CachedCellImg< UnsignedByteType, VolatileByteArray > img = prepareCachedImage( timepointId, 0, level, LoadingStrategy.BLOCKING );
+		final CachedCellImg< UnsignedByteType, DirtyVolatileByteArray > img = prepareCachedImage( timepointId, 0, level, LoadingStrategy.BLOCKING );
 		final UnsignedByteType linkedType = new UnsignedByteType( img );
 		img.setLinkedType( linkedType );
 		return img;
@@ -225,7 +225,7 @@ public class OpenConnectomeImageLoader extends AbstractViewerSetupImgLoader< Uns
 	@Override
 	public RandomAccessibleInterval< VolatileUnsignedByteType > getVolatileImage( final int timepointId, final int level, final ImgLoaderHint... hints )
 	{
-		final CachedCellImg< VolatileUnsignedByteType, VolatileByteArray > img = prepareCachedImage( timepointId, 0, level, LoadingStrategy.VOLATILE );
+		final CachedCellImg< VolatileUnsignedByteType, DirtyVolatileByteArray > img = prepareCachedImage( timepointId, 0, level, LoadingStrategy.VOLATILE );
 		final VolatileUnsignedByteType linkedType = new VolatileUnsignedByteType( img );
 		img.setLinkedType( linkedType );
 		return img;
@@ -255,16 +255,16 @@ public class OpenConnectomeImageLoader extends AbstractViewerSetupImgLoader< Uns
 	 * type} before it can be used. The type should be either {@link ARGBType}
 	 * and {@link VolatileARGBType}.
 	 */
-	protected < T extends NativeType< T > > CachedCellImg< T, VolatileByteArray > prepareCachedImage( final int timepointId, final int setupId, final int level, final LoadingStrategy loadingStrategy )
+	protected < T extends NativeType< T > > CachedCellImg< T, DirtyVolatileByteArray > prepareCachedImage( final int timepointId, final int setupId, final int level, final LoadingStrategy loadingStrategy )
 	{
 		final long[] dimensions = imageDimensions[ level ];
 		final int[] cellDimensions = blockDimensions[ level ];
 
 		final int priority = numScales - 1 - level;
 		final CacheHints cacheHints = new CacheHints( loadingStrategy, priority, false );
-		final CellCache< VolatileByteArray > c = cache.new VolatileCellCache<>( timepointId, setupId, level, cacheHints, loader );
-		final VolatileImgCells< VolatileByteArray > cells = new VolatileImgCells<>( c, new Fraction(), dimensions, cellDimensions );
-		final CachedCellImg< T, VolatileByteArray > img = new CachedCellImg<>( cells );
+		final CellCache< DirtyVolatileByteArray > c = cache.new DirtyVolatileCellCache<>( timepointId, setupId, level, cacheHints, loader );
+		final VolatileImgCells< DirtyVolatileByteArray > cells = new VolatileImgCells<>( c, new Fraction(), dimensions, cellDimensions );
+		final CachedCellImg< T, DirtyVolatileByteArray > img = new CachedCellImg<>( cells );
 		return img;
 	}
 

@@ -7,13 +7,13 @@
  * %%
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice,
  *    this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -37,11 +37,11 @@ import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
 
 import bdv.img.cache.CacheArrayLoader;
-import net.imglib2.img.basictypeaccess.volatiles.array.VolatileByteArray;
+import net.imglib2.img.basictypeaccess.volatiles.array.DirtyVolatileByteArray;
 
-public class OpenConnectomeVolatileArrayLoader implements CacheArrayLoader< VolatileByteArray >
+public class OpenConnectomeVolatileArrayLoader implements CacheArrayLoader< DirtyVolatileByteArray >
 {
-	private VolatileByteArray theEmptyArray;
+	private DirtyVolatileByteArray theEmptyArray;
 
 	final private String tokenUrl;
 
@@ -72,7 +72,7 @@ public class OpenConnectomeVolatileArrayLoader implements CacheArrayLoader< Vola
 			final String mode,
 			final long zMin )
 	{
-		theEmptyArray = new VolatileByteArray( 1, false );
+		theEmptyArray = new DirtyVolatileByteArray( 1, false );
 		this.tokenUrl = baseUrl + "/" + token + "/zip/";
 		this.mode = "/" + mode + ( mode == null || mode.equals( "" ) ? "" : "/" );
 		this.zMin = zMin;
@@ -85,7 +85,7 @@ public class OpenConnectomeVolatileArrayLoader implements CacheArrayLoader< Vola
 	}
 
 	@Override
-	public VolatileByteArray loadArray(
+	public DirtyVolatileByteArray loadArray(
 			final int timepoint,
 			final int setup,
 			final int level,
@@ -103,7 +103,7 @@ public class OpenConnectomeVolatileArrayLoader implements CacheArrayLoader< Vola
 		}
 	}
 
-	public VolatileByteArray tryLoadArray(
+	public DirtyVolatileByteArray tryLoadArray(
 			final int timepoint,
 			final int setup,
 			final int level,
@@ -157,17 +157,17 @@ public class OpenConnectomeVolatileArrayLoader implements CacheArrayLoader< Vola
 			System.out.println( "failed unpacking x=" + min[ 0 ] + " y=" + min[ 1 ] + " z=" + min[ 2 ] + " url(" + url.toString() + ")" );
 		}
 
-		return new VolatileByteArray( data, true );
+		return new DirtyVolatileByteArray( data, true );
 	}
 
 	@Override
-	public VolatileByteArray emptyArray( final int[] dimensions )
+	public DirtyVolatileByteArray emptyArray( final int[] dimensions )
 	{
 		int numEntities = 1;
 		for ( int i = 0; i < dimensions.length; ++i )
 			numEntities *= dimensions[ i ];
 		if ( theEmptyArray.getCurrentStorageArray().length < numEntities )
-			theEmptyArray = new VolatileByteArray( numEntities, false );
+			theEmptyArray = new DirtyVolatileByteArray( numEntities, false );
 		return theEmptyArray;
 	}
 }

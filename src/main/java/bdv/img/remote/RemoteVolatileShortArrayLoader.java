@@ -7,13 +7,13 @@
  * %%
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice,
  *    this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -34,23 +34,23 @@ import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
 
-import net.imglib2.img.basictypeaccess.volatiles.array.VolatileShortArray;
 import bdv.img.cache.CacheArrayLoader;
+import net.imglib2.img.basictypeaccess.volatiles.array.DirtyVolatileShortArray;
 
-public class RemoteVolatileShortArrayLoader implements CacheArrayLoader< VolatileShortArray >
+public class RemoteVolatileShortArrayLoader implements CacheArrayLoader< DirtyVolatileShortArray >
 {
-	private VolatileShortArray theEmptyArray;
+	private DirtyVolatileShortArray theEmptyArray;
 
 	private final RemoteImageLoader imgLoader;
 
 	public RemoteVolatileShortArrayLoader( final RemoteImageLoader imgLoader )
 	{
-		theEmptyArray = new VolatileShortArray( 32 * 32 * 32, false );
+		theEmptyArray = new DirtyVolatileShortArray( 32 * 32 * 32, false );
 		this.imgLoader = imgLoader;
 	}
 
 	@Override
-	public VolatileShortArray loadArray( final int timepoint, final int setup, final int level, final int[] dimensions, final long[] min ) throws InterruptedException
+	public DirtyVolatileShortArray loadArray( final int timepoint, final int setup, final int level, final int[] dimensions, final long[] min ) throws InterruptedException
 	{
 		final int index = imgLoader.getCellIndex( timepoint, setup, level, min );
 		final short[] data = new short[ dimensions[ 0 ] * dimensions[ 1 ] * dimensions[ 2 ] ];
@@ -83,17 +83,17 @@ public class RemoteVolatileShortArrayLoader implements CacheArrayLoader< Volatil
 		{
 			e.printStackTrace();
 		}
-		return new VolatileShortArray( data, true );
+		return new DirtyVolatileShortArray( data, true );
 	}
 
 	@Override
-	public VolatileShortArray emptyArray( final int[] dimensions )
+	public DirtyVolatileShortArray emptyArray( final int[] dimensions )
 	{
 		int numEntities = 1;
 		for ( int i = 0; i < dimensions.length; ++i )
 			numEntities *= dimensions[ i ];
 		if ( theEmptyArray.getCurrentStorageArray().length < numEntities )
-			theEmptyArray = new VolatileShortArray( numEntities, false );
+			theEmptyArray = new DirtyVolatileShortArray( numEntities, false );
 		return theEmptyArray;
 	}
 

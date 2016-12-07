@@ -35,10 +35,11 @@ import bdv.cache.util.BlockingFetchQueues;
 import bdv.cache.util.FetcherThreads;
 import bdv.cache.util.FetcherThreads.Loader;
 import bdv.img.cache.VolatileGlobalCellCache;
+import net.imglib2.Dirty;
 
 
 /**
- * A loading cache mapping keys to {@link VolatileCacheValue}s. The cache spawns
+ * A {@link VolatileCacheValue}s. The cache spawns
  * a set of {@link FetcherThreads} that asynchronously load data for cached
  * values.
  * <p>
@@ -65,14 +66,14 @@ import bdv.img.cache.VolatileGlobalCellCache;
  *
  * @author Tobias Pietzsch &lt;tobias.pietzsch@gmail.com&gt;
  */
-public final class LoadingVolatileCache< K, V extends VolatileCacheValue > extends AbstractLoadingVolatileCache< K, V >
+public final class LoadingDirtyVolatileCache< K, V extends VolatileCacheValue & Dirty > extends AbstractLoadingVolatileCache< K, V >
 {
-	private final WeakSoftCache< K, Entry > cache = WeakSoftCache.newInstance();
+	private final DirtyWeakSoftCache< K, Entry > cache = DirtyWeakSoftCache.newInstance();
 
 	private final FetcherThreads< K > fetchers;
 
 	/**
-	 * Create a new {@link LoadingVolatileCache} with the specified number of
+	 * Create a new {@link LoadingDirtyVolatileCache} with the specified number of
 	 * priority levels and number of {@link FetcherThreads} for asynchronous
 	 * loading of cache entries.
 	 *
@@ -82,7 +83,7 @@ public final class LoadingVolatileCache< K, V extends VolatileCacheValue > exten
 	 *            the number of threads to create for asynchronous loading of
 	 *            cache entries.
 	 */
-	public LoadingVolatileCache( final int numPriorityLevels, final int numFetcherThreads )
+	public LoadingDirtyVolatileCache( final int numPriorityLevels, final int numFetcherThreads )
 	{
 		super( numPriorityLevels );
 		fetchers = new FetcherThreads<>( queue, new EntryLoader(), numFetcherThreads );
@@ -338,7 +339,7 @@ public final class LoadingVolatileCache< K, V extends VolatileCacheValue > exten
 	 * fetch queue. This is used to prevent entries from being enqueued more
 	 * than once per frame.
 	 */
-	final class Entry
+	final class Entry implements Dirty
 	{
 		private final K key;
 
@@ -427,6 +428,12 @@ public final class LoadingVolatileCache< K, V extends VolatileCacheValue > exten
 		public void setEnqueueFrame( final long f )
 		{
 			enqueueFrame = f;
+		}
+
+		@Override
+		public boolean isDirty()
+		{
+			return value.isDirty();
 		}
 	}
 }

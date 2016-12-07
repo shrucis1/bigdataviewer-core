@@ -1,4 +1,4 @@
-/*
+/*-
  * #%L
  * BigDataViewer core classes with minimal dependencies
  * %%
@@ -7,13 +7,13 @@
  * %%
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice,
  *    this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -27,56 +27,36 @@
  * POSSIBILITY OF SUCH DAMAGE.
  * #L%
  */
-package net.imglib2.img.basictypeaccess.volatiles.array;
+package bdv.cache;
 
-import net.imglib2.img.basictypeaccess.array.ByteArray;
-import net.imglib2.img.basictypeaccess.volatiles.VolatileByteAccess;
+import net.imglib2.Dirty;
 
 /**
- * A {@link ByteArray} with an {@link #isValid()} flag.
+ * {@link WeakSoftCache} for {@link Dirty} values.  Adds a method to enqueue
+ * entries for proper finalization.
  *
- * @author Stephan Saalfeld &lt;saalfelds@janelia.hhmi.org&gt;
- * @author Tobias Pietzsch &lt;tobias.pietzsch@gmail.com&gt;
+ * @param <K>
+ *            key type.
+ * @param <V>
+ *            value type.
+ *
+ * @author Stephan Saalfeld
  */
-public class VolatileByteArray extends AbstractVolatileArray< VolatileByteArray > implements VolatileByteAccess
+public interface DirtyWeakSoftCache< K, V extends Dirty > extends WeakSoftCache< K, V >
 {
-	private static final long serialVersionUID = -2609245209721069962L;
+	/**
+	 * Clears all entries from the cache and enqueues them for finalization
+	 */
+	void clearAll();
 
-	protected byte[] data;
-
-	public VolatileByteArray( final int numEntities, final boolean isValid )
+	/**
+	 * Create a new {@link DirtyWeakSoftCache}.
+	 * <p>
+	 * This is here so we can swap out implementations easily and will probably
+	 * be replaced by a scijava service later.
+	 */
+	public static < K, V extends Dirty > DirtyWeakSoftCache< K, V > newInstance()
 	{
-		super( isValid );
-		this.data = new byte[ numEntities ];
-	}
-
-	public VolatileByteArray( final byte[] data, final boolean isValid )
-	{
-		super( isValid );
-		this.data = data;
-	}
-
-	@Override
-	public byte getValue( final int index )
-	{
-		return data[ index ];
-	}
-
-	@Override
-	public void setValue( final int index, final byte value )
-	{
-		data[ index ] = value;
-	}
-
-	@Override
-	public VolatileByteArray createArray( final int numEntities )
-	{
-		return new VolatileByteArray( numEntities, true );
-	}
-
-	@Override
-	public byte[] getCurrentStorageArray()
-	{
-		return data;
+		return new DirtyWeakSoftCacheImp< K, V >();
 	}
 }

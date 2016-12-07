@@ -7,13 +7,13 @@
  * %%
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice,
  *    this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -51,6 +51,7 @@ import ch.systemsx.cisd.hdf5.IHDF5Reader;
 import mpicbg.spim.data.generic.sequence.AbstractSequenceDescription;
 import mpicbg.spim.data.generic.sequence.BasicViewSetup;
 import mpicbg.spim.data.generic.sequence.ImgLoaderHint;
+import net.imglib2.Dirty;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.Volatile;
 import net.imglib2.img.NativeImg;
@@ -62,7 +63,7 @@ import net.imglib2.type.numeric.integer.UnsignedShortType;
 import net.imglib2.type.volatiles.VolatileUnsignedShortType;
 import net.imglib2.util.Fraction;
 
-public class ImarisImageLoader< T extends NativeType< T >, V extends Volatile< T > & NativeType< V > , A extends VolatileAccess > implements ViewerImgLoader
+public class ImarisImageLoader< T extends NativeType< T >, V extends Volatile< T > & NativeType< V > , A extends VolatileAccess & Dirty > implements ViewerImgLoader
 {
 	private final DataType< T, V, A > dataType;
 

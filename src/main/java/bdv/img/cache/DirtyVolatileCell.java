@@ -7,13 +7,13 @@
  * %%
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice,
  *    this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -27,14 +27,29 @@
  * POSSIBILITY OF SUCH DAMAGE.
  * #L%
  */
-package net.imglib2.img.basictypeaccess.volatiles;
+package bdv.img.cache;
+
+import net.imglib2.Dirty;
+import net.imglib2.img.basictypeaccess.volatiles.VolatileAccess;
 
 /**
- * A basic type access that can contain valid or invalid data.
+ * A {@link VolatileCell} for {@link Dirty} values.
  *
- * @author Tobias Pietzsch &lt;tobias.pietzsch@gmail.com&gt;
+ * @param <A>
+ *            type of access to the cell's data.
+ *
+ * @author Stephan Saalfeld
  */
-public interface VolatileAccess
+public class DirtyVolatileCell< A extends VolatileAccess & Dirty > extends VolatileCell< A > implements Dirty
 {
-	boolean isValid();
+	public DirtyVolatileCell( final int[] dimensions, final long[] min, final A data )
+	{
+		super( dimensions, min, data );
+	}
+
+	@Override
+	public boolean isDirty()
+	{
+		return data.isDirty();
+	}
 }
