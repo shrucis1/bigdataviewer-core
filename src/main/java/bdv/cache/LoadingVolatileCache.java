@@ -7,13 +7,13 @@
  * %%
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- *
+ * 
  * 1. Redistributions of source code must retain the above copyright notice,
  *    this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- *
+ * 
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -65,11 +65,21 @@ import bdv.img.cache.VolatileGlobalCellCache;
  *
  * @author Tobias Pietzsch &lt;tobias.pietzsch@gmail.com&gt;
  */
-public final class LoadingVolatileCache< K, V extends VolatileCacheValue > extends AbstractLoadingVolatileCache< K, V >
+public final class LoadingVolatileCache< K, V extends VolatileCacheValue > implements CacheControl
 {
 	private final WeakSoftCache< K, Entry > cache = WeakSoftCache.newInstance();
 
+	private final Object cacheLock = new Object();
+
+	private final CacheIoTiming cacheIoTiming = new CacheIoTiming();
+
+	private final int numPriorityLevels;
+
+	private final BlockingFetchQueues< K > queue;
+
 	private final FetcherThreads< K > fetchers;
+
+	private volatile long currentQueueFrame = 0;
 
 	/**
 	 * Create a new {@link LoadingVolatileCache} with the specified number of
@@ -84,7 +94,8 @@ public final class LoadingVolatileCache< K, V extends VolatileCacheValue > exten
 	 */
 	public LoadingVolatileCache( final int numPriorityLevels, final int numFetcherThreads )
 	{
-		super( numPriorityLevels );
+		this.numPriorityLevels = numPriorityLevels;
+		queue = new BlockingFetchQueues<>( numPriorityLevels );
 		fetchers = new FetcherThreads<>( queue, new EntryLoader(), numFetcherThreads );
 	}
 
@@ -114,7 +125,6 @@ public final class LoadingVolatileCache< K, V extends VolatileCacheValue > exten
 	 *            {@link LoadingStrategy}, queue priority, and queue order.
 	 * @return the value with the specified key in the cache or {@code null}.
 	 */
-	@Override
 	public V getIfPresent( final K key, final CacheHints cacheHints )
 	{
 		final Entry entry = cache.get( key );
@@ -163,7 +173,6 @@ public final class LoadingVolatileCache< K, V extends VolatileCacheValue > exten
 	 * @param cacheLoader
 	 * @return the value with the specified key in the cache.
 	 */
-	@Override
 	public V get( final K key, final CacheHints cacheHints, final VolatileCacheValueLoader< ? extends V > cacheLoader )
 	{
 		Entry entry = null;
@@ -204,10 +213,39 @@ public final class LoadingVolatileCache< K, V extends VolatileCacheValue > exten
 	}
 
 	/**
+	 * (Re-)initialize the IO time budget, that is, the time that can be spent
+	 * in blocking IO per frame/
+	 *
+	 * @param partialBudget
+	 *            Initial budget (in nanoseconds) for priority levels 0 through
+	 *            <em>n</em>. The budget for level <em>i &gt; j</em> must always
+	 *            be smaller-equal the budget for level <em>j</em>. If
+	 *            <em>n</em> is smaller than the number of priority levels, the
+	 *            remaining priority levels are filled up with @code{budget[n]}.
+	 */
+	@Override
+	public void initIoTimeBudget( final long[] partialBudget )
+	{
+		final IoStatistics stats = cacheIoTiming.getThreadGroupIoStatistics();
+		if ( stats.getIoTimeBudget() == null )
+			stats.setIoTimeBudget( new IoTimeBudget( numPriorityLevels ) );
+		stats.getIoTimeBudget().reset( partialBudget );
+	}
+
+	/**
+	 * Get the {@link CacheIoTiming} that provides per thread-group IO
+	 * statistics and budget.
+	 */
+	@Override
+	public CacheIoTiming getCacheIoTiming()
+	{
+		return cacheIoTiming;
+	}
+
+	/**
 	 * Remove all references to loaded data as well as all enqueued requests
 	 * from the cache.
 	 */
-	@Override
 	public void invalidateAll()
 	{
 		queue.clear();
@@ -215,7 +253,6 @@ public final class LoadingVolatileCache< K, V extends VolatileCacheValue > exten
 		prepareNextFrame();
 	}
 
-	@Override
 	public FetcherThreads< K > getFetcherThreads()
 	{
 		return fetchers;

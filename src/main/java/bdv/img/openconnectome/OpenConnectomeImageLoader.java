@@ -44,7 +44,7 @@ import bdv.cache.CacheControl;
 import bdv.cache.CacheHints;
 import bdv.cache.LoadingStrategy;
 import bdv.img.cache.CachedCellImg;
-import bdv.img.cache.DirtyVolatileGlobalCellCache;
+import bdv.img.cache.VolatileGlobalCellCache;
 import bdv.img.cache.VolatileImgCells;
 import bdv.img.cache.VolatileImgCells.CellCache;
 import mpicbg.spim.data.generic.sequence.ImgLoaderHint;
@@ -71,7 +71,7 @@ public class OpenConnectomeImageLoader extends AbstractViewerSetupImgLoader< Uns
 
 	private final AffineTransform3D[] mipmapTransforms;
 
-	private final DirtyVolatileGlobalCellCache cache;
+	private final VolatileGlobalCellCache cache;
 
 	private final OpenConnectomeVolatileArrayLoader loader;
 
@@ -88,7 +88,7 @@ public class OpenConnectomeImageLoader extends AbstractViewerSetupImgLoader< Uns
 		blockDimensions = info.getLevelCellDimensions();
 		mipmapTransforms = info.getLevelTransforms( mode );
 
-		cache = new DirtyVolatileGlobalCellCache( numScales, 10 );
+		cache = new VolatileGlobalCellCache( numScales, 10 );
 		System.out.println( info.getOffsets( mode )[ 0 ][ 2 ] + " " + imageDimensions[ 0 ][ 2 ] );
 
 		loader = new OpenConnectomeVolatileArrayLoader(

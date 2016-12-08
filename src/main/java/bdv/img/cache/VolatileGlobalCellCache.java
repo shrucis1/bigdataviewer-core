@@ -37,6 +37,7 @@ import bdv.cache.VolatileCacheValueLoader;
 import bdv.cache.WeakSoftCache;
 import bdv.cache.util.BlockingFetchQueues;
 import bdv.img.cache.VolatileImgCells.CellCache;
+import net.imglib2.Dirty;
 import net.imglib2.img.basictypeaccess.volatiles.VolatileAccess;
 import net.imglib2.img.cell.CellImg;
 
@@ -196,17 +197,17 @@ public class VolatileGlobalCellCache implements CacheControl
 	 */
 	public static class VolatileCellLoader< A extends VolatileAccess > implements VolatileCacheValueLoader< VolatileCell< A > >
 	{
-		private final CacheArrayLoader< A > cacheArrayLoader;
+		protected final CacheArrayLoader< A > cacheArrayLoader;
 
-		private final int timepoint;
+		protected final int timepoint;
 
-		private final int setup;
+		protected final int setup;
 
-		private final int level;
+		protected final int level;
 
-		private final int[] cellDims;
+		protected final int[] cellDims;
 
-		private final long[] cellMin;
+		protected final long[] cellMin;
 
 		/**
 		 * Create a loader for a specific cell.
@@ -255,6 +256,52 @@ public class VolatileGlobalCellCache implements CacheControl
 	}
 
 	/**
+	 * A {@link VolatileCacheValueLoader} for one specific {@link DirtyVolatileCell}.
+	 */
+	public static class DirtyVolatileCellLoader< A extends VolatileAccess & Dirty > extends VolatileCellLoader< A >
+	{
+		/**
+		 * Create a loader for a specific cell.
+		 *
+		 * @param cacheArrayLoader
+		 *            loads cell data
+		 * @param timepoint
+		 *            timepoint coordinate of the cell
+		 * @param setup
+		 *            setup coordinate of the cell
+		 * @param level
+		 *            level coordinate of the cell
+		 * @param cellDims
+		 *            dimensions of the cell in pixels
+		 * @param cellMin
+		 *            minimum spatial coordinates of the cell in pixels
+		 */
+		public DirtyVolatileCellLoader(
+				final CacheArrayLoader< A > cacheArrayLoader,
+				final int timepoint,
+				final int setup,
+				final int level,
+				final int[] cellDims,
+				final long[] cellMin
+				)
+		{
+			super( cacheArrayLoader, timepoint, setup, level, cellDims, cellMin );
+		}
+
+		@Override
+		public DirtyVolatileCell< A > createEmptyValue()
+		{
+			return new DirtyVolatileCell<>( cellDims, cellMin, cacheArrayLoader.emptyArray( cellDims ) );
+		}
+
+		@Override
+		public DirtyVolatileCell< A > load() throws InterruptedException
+		{
+			return new DirtyVolatileCell<>( cellDims, cellMin, cacheArrayLoader.loadArray( timepoint, setup, level, cellDims, cellMin ) );
+		}
+	}
+
+	/**
 	 * A {@link CellCache} that forwards to the {@link VolatileGlobalCellCache}.
 	 *
 	 * @param <A>
@@ -263,15 +310,15 @@ public class VolatileGlobalCellCache implements CacheControl
 	 */
 	public class VolatileCellCache< A extends VolatileAccess > implements CellCache< A >
 	{
-		private final int timepoint;
+		protected final int timepoint;
 
-		private final int setup;
+		protected final int setup;
 
-		private final int level;
+		protected final int level;
 
-		private CacheHints cacheHints;
+		protected CacheHints cacheHints;
 
-		private final CacheArrayLoader< A > cacheArrayLoader;
+		protected final CacheArrayLoader< A > cacheArrayLoader;
 
 		public VolatileCellCache( final int timepoint, final int setup, final int level, final CacheHints cacheHints, final CacheArrayLoader< A > cacheArrayLoader )
 		{
@@ -303,6 +350,48 @@ public class VolatileGlobalCellCache implements CacheControl
 		public void setCacheHints( final CacheHints cacheHints )
 		{
 			this.cacheHints = cacheHints;
+		}
+	}
+
+	/**
+	 * A {@link CellCache} that forwards to the {@link VolatileGlobalCellCache}.
+	 *
+	 * @param <A>
+	 *
+	 * @author Stephan Saalfeld
+	 */
+	public class DirtyVolatileCellCache< A extends VolatileAccess & Dirty > extends VolatileCellCache< A >
+	{
+		public DirtyVolatileCellCache(
+				final int timepoint,
+				final int setup,
+				final int level,
+				final CacheHints cacheHints,
+				final CacheArrayLoader< A > cacheArrayLoader )
+		{
+			super(
+					timepoint,
+					setup,
+					level,
+					cacheHints,
+					cacheArrayLoader );
+		}
+
+		@SuppressWarnings( "unchecked" )
+		@Override
+		public DirtyVolatileCell< A > get( final long index )
+		{
+			final Key key = new Key( timepoint, setup, level, index );
+			return ( DirtyVolatileCell< A > ) volatileCache.getIfPresent( key, cacheHints );
+		}
+
+		@SuppressWarnings( "unchecked" )
+		@Override
+		public DirtyVolatileCell< A > load( final long index, final int[] cellDims, final long[] cellMin )
+		{
+			final Key key = new Key( timepoint, setup, level, index );
+			final DirtyVolatileCellLoader< A > loader = new DirtyVolatileCellLoader<>( cacheArrayLoader, timepoint, setup, level, cellDims, cellMin );
+			return ( DirtyVolatileCell< A > ) volatileCache.get( key, cacheHints, loader );
 		}
 	}
 }

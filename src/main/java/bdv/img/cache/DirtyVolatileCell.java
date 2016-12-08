@@ -29,6 +29,8 @@
  */
 package bdv.img.cache;
 
+import java.util.Arrays;
+
 import net.imglib2.Dirty;
 import net.imglib2.img.basictypeaccess.volatiles.VolatileAccess;
 
@@ -51,5 +53,11 @@ public class DirtyVolatileCell< A extends VolatileAccess & Dirty > extends Volat
 	public boolean isDirty()
 	{
 		return data.isDirty();
+	}
+
+	@Override
+	public void finalize()
+	{
+		System.out.println( "Finalizing " + ( isDirty() ? "" : "non " ) + "dirty cell " + Arrays.toString( min ) + " -> " + Arrays.toString( max ) );
 	}
 }
