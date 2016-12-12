@@ -29,24 +29,27 @@
  */
 package bdv.img.cache;
 
+import java.util.HashMap;
+
 import bdv.cache.CacheControl;
 import bdv.cache.CacheHints;
 import bdv.cache.CacheIoTiming;
+import bdv.cache.CacheIoTiming.IoStatistics;
+import bdv.cache.CacheIoTiming.IoTimeBudget;
 import bdv.cache.LoadingVolatileCache;
 import bdv.cache.VolatileCacheValueLoader;
 import bdv.cache.WeakSoftCache;
+import bdv.cache.WeakSoftCacheFactory;
 import bdv.cache.util.BlockingFetchQueues;
+import bdv.cache.util.FetcherThreads;
+import bdv.cache.util.Loader;
 import bdv.img.cache.VolatileImgCells.CellCache;
 import net.imglib2.img.basictypeaccess.volatiles.VolatileAccess;
 import net.imglib2.img.cell.CellImg;
 
 public class VolatileGlobalCellCache implements CacheControl
 {
-	/**
-	 * Key for a cell identified by timepoint, setup, level, and index
-	 * (flattened spatial coordinate).
-	 */
-	public static class Key
+	public static class ImgKey
 	{
 		private final int timepoint;
 
@@ -54,31 +57,23 @@ public class VolatileGlobalCellCache implements CacheControl
 
 		private final int level;
 
-		private final long index;
-
 		/**
-		 * Create a Key for the specified cell. Note that {@code cellDims} and
-		 * {@code cellMin} are not used for {@code hashcode()/equals()}.
+		 * Create a Key for the specified image.
 		 *
 		 * @param timepoint
-		 *            timepoint coordinate of the cell
+		 *            timepoint coordinate of the image.
 		 * @param setup
-		 *            setup coordinate of the cell
+		 *            setup coordinate of the image.
 		 * @param level
-		 *            level coordinate of the cell
-		 * @param index
-		 *            index of the cell (flattened spatial coordinate of the
-		 *            cell)
+		 *            level coordinate of the image.
 		 */
-		public Key( final int timepoint, final int setup, final int level, final long index )
+		public ImgKey( final int timepoint, final int setup, final int level )
 		{
 			this.timepoint = timepoint;
 			this.setup = setup;
 			this.level = level;
-			this.index = index;
 
-			int value = Long.hashCode( index );
-			value = 31 * value + level;
+			int value = Long.hashCode( level );
 			value = 31 * value + setup;
 			value = 31 * value + timepoint;
 			hashcode = value;
@@ -89,10 +84,10 @@ public class VolatileGlobalCellCache implements CacheControl
 		{
 			if ( this == other )
 				return true;
-			if ( !( other instanceof VolatileGlobalCellCache.Key ) )
+			if ( !( other instanceof ImgKey ) )
 				return false;
-			final Key that = ( Key ) other;
-			return ( this.timepoint == that.timepoint ) && ( this.setup == that.setup ) && ( this.level == that.level ) && ( this.index == that.index );
+			final ImgKey that = ( ImgKey ) other;
+			return ( this.timepoint == that.timepoint ) && ( this.setup == that.setup ) && ( this.level == that.level );
 		}
 
 		final int hashcode;
@@ -104,7 +99,55 @@ public class VolatileGlobalCellCache implements CacheControl
 		}
 	}
 
-	protected final LoadingVolatileCache< Key, VolatileCell< ? > > volatileCache; // TODO rename
+	/**
+	 * Key for a cell identified by index
+	 * (flattened spatial coordinate).
+	 */
+	public static class CellKey
+	{
+		private final long index;
+
+		/**
+		 * Create a Key for the specified cell.
+		 * @param index
+		 *            index of the cell (flattened spatial coordinate of the
+		 *            cell)
+		 */
+		public CellKey( final long index )
+		{
+			this.index = index;
+			hashcode = Long.hashCode( index );
+		}
+
+		@Override
+		public boolean equals( final Object other )
+		{
+			if ( this == other )
+				return true;
+			if ( !( other instanceof CellKey ) )
+				return false;
+			final CellKey that = ( CellKey ) other;
+			return this.index == that.index;
+		}
+
+		final int hashcode;
+
+		@Override
+		public int hashCode()
+		{
+			return hashcode;
+		}
+	}
+
+	private final WeakSoftCacheFactory cacheFactory = new WeakSoftCacheFactory();
+
+	private final BlockingFetchQueues< Loader > queue;
+
+	private final FetcherThreads fetchers;
+
+	private final CacheIoTiming cacheIoTiming;
+
+	private final HashMap< ImgKey, LoadingVolatileCache< CellKey, ? extends VolatileCell< ? > > > imgCaches;
 
 	/**
 	 * @param maxNumLevels
@@ -113,15 +156,19 @@ public class VolatileGlobalCellCache implements CacheControl
 	 */
 	public VolatileGlobalCellCache( final int maxNumLevels, final int numFetcherThreads )
 	{
-		volatileCache = new LoadingVolatileCache<>( maxNumLevels, numFetcherThreads );
+		queue = new BlockingFetchQueues<>( maxNumLevels );
+		fetchers = new FetcherThreads( queue, numFetcherThreads );
+		cacheIoTiming = new CacheIoTiming();
+		imgCaches = new HashMap<>();
 	}
 
 	/**
 	 * pause all fetcher threads for the specified number of milliseconds.
 	 */
+	// TODO remove
 	public void pauseFetcherThreadsFor( final long ms )
 	{
-		volatileCache.getFetcherThreads().pauseFetcherThreadsFor( ms );
+		fetchers.pauseFetcherThreadsFor( ms );
 	}
 
 	/**
@@ -138,7 +185,8 @@ public class VolatileGlobalCellCache implements CacheControl
 	@Override
 	public void prepareNextFrame()
 	{
-		volatileCache.prepareNextFrame();
+		queue.clearToPrefetch();
+		cacheFactory.cleanUp();
 	}
 
 	/**
@@ -155,7 +203,10 @@ public class VolatileGlobalCellCache implements CacheControl
 	@Override
 	public void initIoTimeBudget( final long[] partialBudget )
 	{
-		volatileCache.initIoTimeBudget( partialBudget );
+		final IoStatistics stats = cacheIoTiming.getThreadGroupIoStatistics();
+		if ( stats.getIoTimeBudget() == null )
+			stats.setIoTimeBudget( new IoTimeBudget( queue.getNumPriorities() ) );
+		stats.getIoTimeBudget().reset( partialBudget );
 	}
 
 	/**
@@ -165,7 +216,7 @@ public class VolatileGlobalCellCache implements CacheControl
 	@Override
 	public CacheIoTiming getCacheIoTiming()
 	{
-		return volatileCache.getCacheIoTiming();
+		return cacheIoTiming;
 	}
 
 	/**
@@ -174,7 +225,13 @@ public class VolatileGlobalCellCache implements CacheControl
 	 */
 	public void clearCache()
 	{
-		volatileCache.invalidateAll();
+		synchronized ( imgCaches )
+		{
+			for ( final LoadingVolatileCache< CellKey, ? > cache : imgCaches.values() )
+				cache.invalidateAll();
+			imgCaches.clear();
+			queue.clear();
+		}
 	}
 
 	/**
@@ -186,71 +243,24 @@ public class VolatileGlobalCellCache implements CacheControl
 	 *
 	 * @return the cache that handles cell loading
 	 */
-	public LoadingVolatileCache< Key, VolatileCell< ? > > getLoadingVolatileCache()
+//	TODO
+//	public LoadingVolatileCache< Key, VolatileCell< ? > > getLoadingVolatileCache()
+//	{
+//		return volatileCache;
+//	}
+
+	< A extends VolatileAccess > LoadingVolatileCache< CellKey, VolatileCell< A > > getImageCache( final ImgKey key )
 	{
-		return volatileCache;
-	}
-
-	/**
-	 * A {@link VolatileCacheValueLoader} for one specific {@link VolatileCell}.
-	 */
-	public static class VolatileCellLoader< A extends VolatileAccess > implements VolatileCacheValueLoader< VolatileCell< A > >
-	{
-		private final CacheArrayLoader< A > cacheArrayLoader;
-
-		private final int timepoint;
-
-		private final int setup;
-
-		private final int level;
-
-		private final int[] cellDims;
-
-		private final long[] cellMin;
-
-		/**
-		 * Create a loader for a specific cell.
-		 *
-		 * @param cacheArrayLoader
-		 *            loads cell data
-		 * @param timepoint
-		 *            timepoint coordinate of the cell
-		 * @param setup
-		 *            setup coordinate of the cell
-		 * @param level
-		 *            level coordinate of the cell
-		 * @param cellDims
-		 *            dimensions of the cell in pixels
-		 * @param cellMin
-		 *            minimum spatial coordinates of the cell in pixels
-		 */
-		public VolatileCellLoader(
-				final CacheArrayLoader< A > cacheArrayLoader,
-				final int timepoint,
-				final int setup,
-				final int level,
-				final int[] cellDims,
-				final long[] cellMin
-				)
+		synchronized ( imgCaches )
 		{
-			this.cacheArrayLoader = cacheArrayLoader;
-			this.timepoint = timepoint;
-			this.setup = setup;
-			this.level = level;
-			this.cellDims = cellDims;
-			this.cellMin = cellMin;
-		}
-
-		@Override
-		public VolatileCell< A > createEmptyValue()
-		{
-			return new VolatileCell<>( cellDims, cellMin, cacheArrayLoader.emptyArray( cellDims ) );
-		}
-
-		@Override
-		public VolatileCell< A > load() throws InterruptedException
-		{
-			return new VolatileCell<>( cellDims, cellMin, cacheArrayLoader.loadArray( timepoint, setup, level, cellDims, cellMin ) );
+			@SuppressWarnings( "unchecked" )
+			LoadingVolatileCache< CellKey, VolatileCell< A > > cache = ( LoadingVolatileCache< CellKey, VolatileCell< A > > ) imgCaches.get( key );
+			if ( cache == null )
+			{
+				cache = new LoadingVolatileCache<>( cacheFactory, queue, cacheIoTiming );
+				imgCaches.put( key, cache );
+			}
+			return cache;
 		}
 	}
 
@@ -271,38 +281,81 @@ public class VolatileGlobalCellCache implements CacheControl
 
 		private CacheHints cacheHints;
 
+		private final LoadingVolatileCache< CellKey, VolatileCell< A > > volatileCache;
+
 		private final CacheArrayLoader< A > cacheArrayLoader;
 
-		public VolatileCellCache( final int timepoint, final int setup, final int level, final CacheHints cacheHints, final CacheArrayLoader< A > cacheArrayLoader )
+		public VolatileCellCache(
+				final int timepoint,
+				final int setup,
+				final int level,
+				final CacheHints cacheHints,
+				final CacheArrayLoader< A > cacheArrayLoader )
 		{
 			this.timepoint = timepoint;
 			this.setup = setup;
 			this.level = level;
 			this.cacheHints = cacheHints;
 			this.cacheArrayLoader = cacheArrayLoader;
+			volatileCache = getImageCache( new ImgKey( timepoint, setup, level ) );
 		}
 
-		@SuppressWarnings( "unchecked" )
 		@Override
 		public VolatileCell< A > get( final long index )
 		{
-			final Key key = new Key( timepoint, setup, level, index );
-			return ( VolatileCell< A > ) volatileCache.getIfPresent( key, cacheHints );
+			final CellKey key = new CellKey( index );
+			return volatileCache.getIfPresent( key, cacheHints );
 		}
 
-		@SuppressWarnings( "unchecked" )
 		@Override
 		public VolatileCell< A > load( final long index, final int[] cellDims, final long[] cellMin )
 		{
-			final Key key = new Key( timepoint, setup, level, index );
-			final VolatileCellLoader< A > loader = new VolatileCellLoader<>( cacheArrayLoader, timepoint, setup, level, cellDims, cellMin );
-			return ( VolatileCell< A > ) volatileCache.get( key, cacheHints, loader );
+			final VolatileCellLoader loader = new VolatileCellLoader( cellDims, cellMin );
+			return volatileCache.get( new CellKey( index ), cacheHints, loader );
 		}
 
 		@Override
 		public void setCacheHints( final CacheHints cacheHints )
 		{
 			this.cacheHints = cacheHints;
+		}
+
+		/**
+		 * A {@link VolatileCacheValueLoader} for one specific {@link VolatileCell}.
+		 */
+		private class VolatileCellLoader implements VolatileCacheValueLoader< VolatileCell< A > >
+		{
+			private final int[] cellDims;
+
+			private final long[] cellMin;
+
+			/**
+			 * Create a loader for a specific cell.
+			 *
+			 * @param cellDims
+			 *            dimensions of the cell in pixels
+			 * @param cellMin
+			 *            minimum spatial coordinates of the cell in pixels
+			 */
+			public VolatileCellLoader(
+					final int[] cellDims,
+					final long[] cellMin )
+			{
+				this.cellDims = cellDims;
+				this.cellMin = cellMin;
+			}
+
+			@Override
+			public VolatileCell< A > createEmptyValue()
+			{
+				return new VolatileCell<>( cellDims, cellMin, cacheArrayLoader.emptyArray( cellDims ) );
+			}
+
+			@Override
+			public VolatileCell< A > load() throws InterruptedException
+			{
+				return new VolatileCell<>( cellDims, cellMin, cacheArrayLoader.loadArray( timepoint, setup, level, cellDims, cellMin ) );
+			}
 		}
 	}
 }

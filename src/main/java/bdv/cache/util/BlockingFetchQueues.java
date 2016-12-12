@@ -76,6 +76,9 @@ public class BlockingFetchQueues< E >
 	/** Condition for waiting take()s */
 	private final Condition notEmpty;
 
+	/** incremented with every {@link #clearToPrefetch()} call */
+	private volatile long currentFrame = 0;
+
 	public BlockingFetchQueues( final int numPriorities )
 	{
 		this( numPriorities, 16384 );
@@ -188,6 +191,8 @@ public class BlockingFetchQueues< E >
 		lock.lock();
 		try
 		{
+			++currentFrame;
+
 //			System.out.println( "prefetch size before clear = " + prefetch.size() );
 
 			// make room in the prefetch deque
@@ -250,5 +255,15 @@ public class BlockingFetchQueues< E >
 		{
 			lock.unlock();
 		}
+	}
+
+	public int getNumPriorities()
+	{
+		return maxPriority + 1;
+	}
+
+	public long getCurrentFrame()
+	{
+		return currentFrame;
 	}
 }

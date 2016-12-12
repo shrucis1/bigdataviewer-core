@@ -47,13 +47,6 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class WeakSoftCacheImp< K, V > implements WeakSoftCache< K, V >
 {
-	private static WeakSoftCacheFinalizeQueue sharedQueue = new WeakSoftCacheFinalizeQueue();
-
-	WeakSoftCacheImp()
-	{
-		this( sharedQueue );
-	}
-
 	private final ConcurrentHashMap< K, Reference< V > > map = new ConcurrentHashMap<>();
 
 	private final WeakSoftCacheFinalizeQueue queue;

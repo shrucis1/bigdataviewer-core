@@ -17,7 +17,7 @@ public class WeakSoftCacheFinalizeQueue
 	 * To avoid long run-times, per call to {@code cleanUp()}, at most
 	 * {@link #MAX_PER_FRAME_FINALIZE_ENTRIES} are processed.
 	 */
-	public void cleanUp()
+	public synchronized void cleanUp()
 	{
 		for ( int i = 0; i < MAX_PER_FRAME_FINALIZE_ENTRIES; ++i )
 		{
