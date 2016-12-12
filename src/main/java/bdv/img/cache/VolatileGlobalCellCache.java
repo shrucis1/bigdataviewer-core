@@ -99,46 +99,6 @@ public class VolatileGlobalCellCache implements CacheControl
 		}
 	}
 
-	/**
-	 * Key for a cell identified by index
-	 * (flattened spatial coordinate).
-	 */
-	public static class CellKey
-	{
-		private final long index;
-
-		/**
-		 * Create a Key for the specified cell.
-		 * @param index
-		 *            index of the cell (flattened spatial coordinate of the
-		 *            cell)
-		 */
-		public CellKey( final long index )
-		{
-			this.index = index;
-			hashcode = Long.hashCode( index );
-		}
-
-		@Override
-		public boolean equals( final Object other )
-		{
-			if ( this == other )
-				return true;
-			if ( !( other instanceof CellKey ) )
-				return false;
-			final CellKey that = ( CellKey ) other;
-			return this.index == that.index;
-		}
-
-		final int hashcode;
-
-		@Override
-		public int hashCode()
-		{
-			return hashcode;
-		}
-	}
-
 	private final WeakSoftCacheFactory cacheFactory = new WeakSoftCacheFactory();
 
 	private final BlockingFetchQueues< Loader > queue;
@@ -147,7 +107,7 @@ public class VolatileGlobalCellCache implements CacheControl
 
 	private final CacheIoTiming cacheIoTiming;
 
-	private final HashMap< ImgKey, LoadingVolatileCache< CellKey, ? extends VolatileCell< ? > > > imgCaches;
+	private final HashMap< ImgKey, LoadingVolatileCache< Long, ? extends VolatileCell< ? > > > imgCaches;
 
 	/**
 	 * @param maxNumLevels
@@ -227,7 +187,7 @@ public class VolatileGlobalCellCache implements CacheControl
 	{
 		synchronized ( imgCaches )
 		{
-			for ( final LoadingVolatileCache< CellKey, ? > cache : imgCaches.values() )
+			for ( final LoadingVolatileCache< Long, ? > cache : imgCaches.values() )
 				cache.invalidateAll();
 			imgCaches.clear();
 			queue.clear();
@@ -249,12 +209,12 @@ public class VolatileGlobalCellCache implements CacheControl
 //		return volatileCache;
 //	}
 
-	< A extends VolatileAccess > LoadingVolatileCache< CellKey, VolatileCell< A > > getImageCache( final ImgKey key )
+	< A extends VolatileAccess > LoadingVolatileCache< Long, VolatileCell< A > > getImageCache( final ImgKey key )
 	{
 		synchronized ( imgCaches )
 		{
 			@SuppressWarnings( "unchecked" )
-			LoadingVolatileCache< CellKey, VolatileCell< A > > cache = ( LoadingVolatileCache< CellKey, VolatileCell< A > > ) imgCaches.get( key );
+			LoadingVolatileCache< Long, VolatileCell< A > > cache = ( LoadingVolatileCache< Long, VolatileCell< A > > ) imgCaches.get( key );
 			if ( cache == null )
 			{
 				cache = new LoadingVolatileCache<>( cacheFactory, queue, cacheIoTiming );
@@ -281,7 +241,7 @@ public class VolatileGlobalCellCache implements CacheControl
 
 		private CacheHints cacheHints;
 
-		private final LoadingVolatileCache< CellKey, VolatileCell< A > > volatileCache;
+		private final LoadingVolatileCache< Long, VolatileCell< A > > volatileCache;
 
 		private final CacheArrayLoader< A > cacheArrayLoader;
 
@@ -303,15 +263,14 @@ public class VolatileGlobalCellCache implements CacheControl
 		@Override
 		public VolatileCell< A > get( final long index )
 		{
-			final CellKey key = new CellKey( index );
-			return volatileCache.getIfPresent( key, cacheHints );
+			return volatileCache.getIfPresent( index, cacheHints );
 		}
 
 		@Override
 		public VolatileCell< A > load( final long index, final int[] cellDims, final long[] cellMin )
 		{
 			final VolatileCellLoader loader = new VolatileCellLoader( cellDims, cellMin );
-			return volatileCache.get( new CellKey( index ), cacheHints, loader );
+			return volatileCache.get( index, cacheHints, loader );
 		}
 
 		@Override
