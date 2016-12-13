@@ -335,7 +335,7 @@ public final class LoadingVolatileCache< K, V extends VolatileCacheValue >
 
 		private V value;
 
-		private final VolatileCacheValueLoader< ? extends V > loader;
+		private VolatileCacheValueLoader< ? extends V > loader;
 
 		/**
 		 * When was this entry last enqueued for loading (see
@@ -392,6 +392,7 @@ public final class LoadingVolatileCache< K, V extends VolatileCacheValue >
 					if ( !value.isValid() )
 					{
 						value = loader.load();
+						loader = null;
 						enqueueFrame = Long.MAX_VALUE;
 						cache.putSoft( key, this );
 						notifyAll();
