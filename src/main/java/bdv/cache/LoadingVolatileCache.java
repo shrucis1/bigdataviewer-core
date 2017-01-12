@@ -29,8 +29,9 @@
  */
 package bdv.cache;
 
-import bdv.cache.CacheIoTiming.IoStatistics;
-import bdv.cache.CacheIoTiming.IoTimeBudget;
+import bdv.cache.iotiming.CacheIoTiming;
+import bdv.cache.iotiming.IoStatistics;
+import bdv.cache.iotiming.IoTimeBudget;
 import bdv.cache.util.BlockingFetchQueues;
 import bdv.cache.util.FetcherThreads;
 import bdv.cache.util.Loader;
@@ -71,8 +72,6 @@ public final class LoadingVolatileCache< K, V extends VolatileCacheValue >
 
 	private final Object cacheLock = new Object();
 
-	private final CacheIoTiming cacheIoTiming;
-
 	private final BlockingFetchQueues< Loader > queue;
 
 	/**
@@ -94,12 +93,10 @@ public final class LoadingVolatileCache< K, V extends VolatileCacheValue >
 
 	public LoadingVolatileCache(
 			final WeakSoftCacheFactory cacheFactory,
-			final BlockingFetchQueues< Loader > queue,
-			final CacheIoTiming cacheIoTiming )
+			final BlockingFetchQueues< Loader > queue )
 	{
 		this.cache = cacheFactory.newInstance();
 		this.queue = queue;
-		this.cacheIoTiming = cacheIoTiming;
 	}
 
 	/**
@@ -257,7 +254,7 @@ public final class LoadingVolatileCache< K, V extends VolatileCacheValue >
 	 */
 	private void loadOrEnqueue( final Entry entry, final int priority, final boolean enqueuToFront )
 	{
-		final IoStatistics stats = cacheIoTiming.getThreadGroupIoStatistics();
+		final IoStatistics stats = CacheIoTiming.getIoStatistics();
 		final IoTimeBudget budget = stats.getIoTimeBudget();
 		final long timeLeft = budget.timeLeft( priority );
 		if ( timeLeft > 0 )

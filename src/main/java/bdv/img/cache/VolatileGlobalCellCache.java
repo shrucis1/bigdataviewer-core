@@ -33,9 +33,6 @@ import java.util.HashMap;
 
 import bdv.cache.CacheControl;
 import bdv.cache.CacheHints;
-import bdv.cache.CacheIoTiming;
-import bdv.cache.CacheIoTiming.IoStatistics;
-import bdv.cache.CacheIoTiming.IoTimeBudget;
 import bdv.cache.LoadingVolatileCache;
 import bdv.cache.VolatileCacheValueLoader;
 import bdv.cache.WeakSoftCache;
@@ -105,8 +102,6 @@ public class VolatileGlobalCellCache implements CacheControl
 
 	private final FetcherThreads fetchers;
 
-	private final CacheIoTiming cacheIoTiming;
-
 	private final HashMap< ImgKey, LoadingVolatileCache< Long, ? extends VolatileCell< ? > > > imgCaches;
 
 	/**
@@ -118,7 +113,6 @@ public class VolatileGlobalCellCache implements CacheControl
 	{
 		queue = new BlockingFetchQueues<>( maxNumLevels );
 		fetchers = new FetcherThreads( queue, numFetcherThreads );
-		cacheIoTiming = new CacheIoTiming();
 		imgCaches = new HashMap<>();
 	}
 
@@ -147,36 +141,6 @@ public class VolatileGlobalCellCache implements CacheControl
 	{
 		queue.clearToPrefetch();
 		cacheFactory.cleanUp();
-	}
-
-	/**
-	 * (Re-)initialize the IO time budget, that is, the time that can be spent
-	 * in blocking IO per frame/
-	 *
-	 * @param partialBudget
-	 *            Initial budget (in nanoseconds) for priority levels 0 through
-	 *            <em>n</em>. The budget for level <em>i&gt;j</em> must always be
-	 *            smaller-equal the budget for level <em>j</em>. If <em>n</em>
-	 *            is smaller than the maximum number of mipmap levels, the
-	 *            remaining priority levels are filled up with budget[n].
-	 */
-	@Override
-	public void initIoTimeBudget( final long[] partialBudget )
-	{
-		final IoStatistics stats = cacheIoTiming.getThreadGroupIoStatistics();
-		if ( stats.getIoTimeBudget() == null )
-			stats.setIoTimeBudget( new IoTimeBudget( queue.getNumPriorities() ) );
-		stats.getIoTimeBudget().reset( partialBudget );
-	}
-
-	/**
-	 * Get the {@link CacheIoTiming} that provides per thread-group IO
-	 * statistics and budget.
-	 */
-	@Override
-	public CacheIoTiming getCacheIoTiming()
-	{
-		return cacheIoTiming;
 	}
 
 	/**
@@ -217,7 +181,7 @@ public class VolatileGlobalCellCache implements CacheControl
 			LoadingVolatileCache< Long, VolatileCell< A > > cache = ( LoadingVolatileCache< Long, VolatileCell< A > > ) imgCaches.get( key );
 			if ( cache == null )
 			{
-				cache = new LoadingVolatileCache<>( cacheFactory, queue, cacheIoTiming );
+				cache = new LoadingVolatileCache<>( cacheFactory, queue );
 				imgCaches.put( key, cache );
 			}
 			return cache;
