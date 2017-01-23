@@ -30,9 +30,9 @@
 package bdv.cache.util;
 
 import java.util.ArrayList;
+import java.util.concurrent.Callable;
 import java.util.function.IntFunction;
 
-import bdv.cache.LoadingVolatileCache;
 import bdv.cache.VolatileCacheValue;
 
 /**
@@ -66,7 +66,7 @@ public class FetcherThreads
 	 * @param numFetcherThreads how many parallel fetcher threads to start.
 	 */
 	public FetcherThreads(
-			final BlockingFetchQueues< Loader > queue,
+			final BlockingFetchQueues< Callable< Void > > queue,
 			final int numFetcherThreads )
 	{
 		this( queue, numFetcherThreads, i -> String.format( "Fetcher-%d", i ) );
@@ -81,7 +81,7 @@ public class FetcherThreads
 	 * @param threadIndexToName a function for naming fetcher threads (takes an index and returns a name).
 	 */
 	public FetcherThreads(
-			final BlockingFetchQueues< Loader > queue,
+			final BlockingFetchQueues< Callable< Void > > queue,
 			final int numFetcherThreads,
 			final IntFunction< String > threadIndexToName )
 	{
@@ -127,13 +127,13 @@ public class FetcherThreads
 
 	static final class Fetcher extends Thread
 	{
-		private final BlockingFetchQueues< Loader > queue;
+		private final BlockingFetchQueues< Callable< Void > > queue;
 
 		private final Object lock = new Object();
 
 		private volatile long pauseUntilTimeMillis = 0;
 
-		public Fetcher( final BlockingFetchQueues< Loader > queue )
+		public Fetcher( final BlockingFetchQueues< Callable< Void > > queue )
 		{
 			this.queue = queue;
 		}
@@ -141,7 +141,7 @@ public class FetcherThreads
 		@Override
 		public final void run()
 		{
-			Loader loader = null;
+			Callable< Void > loader = null;
 			while ( true )
 			{
 				while ( loader == null )
@@ -167,11 +167,14 @@ public class FetcherThreads
 				}
 				try
 				{
-					loader.load();
+					loader.call();
 					loader = null;
 				}
-				catch ( final InterruptedException e )
-				{}
+				catch ( final Exception e )
+				{
+					if ( ! ( e.getCause() instanceof InterruptedException ) )
+						e.printStackTrace();
+				}
 			}
 		}
 

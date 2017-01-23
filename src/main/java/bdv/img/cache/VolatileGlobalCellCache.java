@@ -30,16 +30,18 @@
 package bdv.img.cache;
 
 import java.util.HashMap;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 
 import bdv.cache.CacheControl;
 import bdv.cache.CacheHints;
-import bdv.cache.LoadingVolatileCache;
 import bdv.cache.VolatileCacheValueLoader;
 import bdv.cache.WeakSoftCache;
-import bdv.cache.WeakSoftCacheFactory;
+import bdv.cache.guavaapi.RefCacheFactory;
+import bdv.cache.guavaapi.VolatileLoader;
+import bdv.cache.guavaapi.WeakRefVolatileCache;
 import bdv.cache.util.BlockingFetchQueues;
 import bdv.cache.util.FetcherThreads;
-import bdv.cache.util.Loader;
 import bdv.img.cache.VolatileImgCells.CellCache;
 import net.imglib2.img.basictypeaccess.volatiles.VolatileAccess;
 import net.imglib2.img.cell.CellImg;
@@ -54,6 +56,8 @@ public class VolatileGlobalCellCache implements CacheControl
 
 		private final int level;
 
+		private final CacheHints cacheHints;
+
 		/**
 		 * Create a Key for the specified image.
 		 *
@@ -63,16 +67,20 @@ public class VolatileGlobalCellCache implements CacheControl
 		 *            setup coordinate of the image.
 		 * @param level
 		 *            level coordinate of the image.
+		 * @param cacheHints
+		 *            cache hints for the image.
 		 */
-		public ImgKey( final int timepoint, final int setup, final int level )
+		public ImgKey( final int timepoint, final int setup, final int level, final CacheHints cacheHints )
 		{
 			this.timepoint = timepoint;
 			this.setup = setup;
 			this.level = level;
+			this.cacheHints = cacheHints;
 
 			int value = Long.hashCode( level );
 			value = 31 * value + setup;
 			value = 31 * value + timepoint;
+			value = 31 * value + cacheHints.hashCode();
 			hashcode = value;
 		}
 
@@ -87,7 +95,7 @@ public class VolatileGlobalCellCache implements CacheControl
 			return ( this.timepoint == that.timepoint ) && ( this.setup == that.setup ) && ( this.level == that.level );
 		}
 
-		final int hashcode;
+		private final int hashcode;
 
 		@Override
 		public int hashCode()
@@ -96,13 +104,13 @@ public class VolatileGlobalCellCache implements CacheControl
 		}
 	}
 
-	private final WeakSoftCacheFactory cacheFactory = new WeakSoftCacheFactory();
+	private final RefCacheFactory cacheFactory = new RefCacheFactory();
 
-	private final BlockingFetchQueues< Loader > queue;
+	private final BlockingFetchQueues< Callable< Void > > queue;
 
 	private final FetcherThreads fetchers;
 
-	private final HashMap< ImgKey, LoadingVolatileCache< Long, ? extends VolatileCell< ? > > > imgCaches;
+	private final HashMap< ImgKey, WeakRefVolatileCache< Long, ? extends VolatileCell< ? > > > imgCaches;
 
 	/**
 	 * @param maxNumLevels
@@ -151,7 +159,7 @@ public class VolatileGlobalCellCache implements CacheControl
 	{
 		synchronized ( imgCaches )
 		{
-			for ( final LoadingVolatileCache< Long, ? > cache : imgCaches.values() )
+			for ( final WeakRefVolatileCache< Long, ? > cache : imgCaches.values() )
 				cache.invalidateAll();
 			imgCaches.clear();
 			queue.clear();
@@ -161,7 +169,7 @@ public class VolatileGlobalCellCache implements CacheControl
 	/**
 	 * <em>For internal use.</em>
 	 * <p>
-	 * Get the {@link LoadingVolatileCache} that handles cell loading. This is
+	 * Get the {@link WeakRefVolatileCache} that handles cell loading. This is
 	 * used by bigdataviewer-server to directly issue Cell requests without
 	 * having {@link CellImg}s and associated {@link VolatileCellCache}s.
 	 *
@@ -173,15 +181,15 @@ public class VolatileGlobalCellCache implements CacheControl
 //		return volatileCache;
 //	}
 
-	< A extends VolatileAccess > LoadingVolatileCache< Long, VolatileCell< A > > getImageCache( final ImgKey key )
+	< A extends VolatileAccess > WeakRefVolatileCache< Long, VolatileCell< A > > getImageCache( final ImgKey key )
 	{
 		synchronized ( imgCaches )
 		{
 			@SuppressWarnings( "unchecked" )
-			LoadingVolatileCache< Long, VolatileCell< A > > cache = ( LoadingVolatileCache< Long, VolatileCell< A > > ) imgCaches.get( key );
+			WeakRefVolatileCache< Long, VolatileCell< A > > cache = ( WeakRefVolatileCache< Long, VolatileCell< A > > ) imgCaches.get( key );
 			if ( cache == null )
 			{
-				cache = new LoadingVolatileCache<>( cacheFactory, queue );
+				cache = cacheFactory.newWeakRefVolatileCache( queue, key.cacheHints );
 				imgCaches.put( key, cache );
 			}
 			return cache;
@@ -205,7 +213,7 @@ public class VolatileGlobalCellCache implements CacheControl
 
 		private CacheHints cacheHints;
 
-		private final LoadingVolatileCache< Long, VolatileCell< A > > volatileCache;
+		private final WeakRefVolatileCache< Long, VolatileCell< A > > volatileCache;
 
 		private final CacheArrayLoader< A > cacheArrayLoader;
 
@@ -219,22 +227,29 @@ public class VolatileGlobalCellCache implements CacheControl
 			this.timepoint = timepoint;
 			this.setup = setup;
 			this.level = level;
-			this.cacheHints = cacheHints;
 			this.cacheArrayLoader = cacheArrayLoader;
-			volatileCache = getImageCache( new ImgKey( timepoint, setup, level ) );
+			volatileCache = getImageCache( new ImgKey( timepoint, setup, level, cacheHints ) );
 		}
 
 		@Override
 		public VolatileCell< A > get( final long index )
 		{
-			return volatileCache.getIfPresent( index, cacheHints );
+			return volatileCache.getIfPresent( index );
 		}
 
 		@Override
 		public VolatileCell< A > load( final long index, final int[] cellDims, final long[] cellMin )
 		{
 			final VolatileCellLoader loader = new VolatileCellLoader( cellDims, cellMin );
-			return volatileCache.get( index, cacheHints, loader );
+			try
+			{
+				return volatileCache.get( index, loader );
+			}
+			catch ( final ExecutionException e )
+			{
+				e.printStackTrace();
+				return null;
+			}
 		}
 
 		@Override
@@ -246,7 +261,7 @@ public class VolatileGlobalCellCache implements CacheControl
 		/**
 		 * A {@link VolatileCacheValueLoader} for one specific {@link VolatileCell}.
 		 */
-		private class VolatileCellLoader implements VolatileCacheValueLoader< VolatileCell< A > >
+		private class VolatileCellLoader implements VolatileLoader< VolatileCell< A > >
 		{
 			private final int[] cellDims;
 
@@ -275,7 +290,7 @@ public class VolatileGlobalCellCache implements CacheControl
 			}
 
 			@Override
-			public VolatileCell< A > load() throws InterruptedException
+			public VolatileCell< A > call() throws Exception
 			{
 				return new VolatileCell<>( cellDims, cellMin, cacheArrayLoader.loadArray( timepoint, setup, level, cellDims, cellMin ) );
 			}
