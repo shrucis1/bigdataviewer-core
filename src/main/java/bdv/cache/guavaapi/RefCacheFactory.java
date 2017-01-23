@@ -4,12 +4,11 @@ import java.util.concurrent.Callable;
 
 import bdv.cache.CacheHints;
 import bdv.cache.VolatileCacheValue;
-import bdv.cache.WeakSoftCache;
 import bdv.cache.WeakSoftCacheFinalizeQueue;
 import bdv.cache.util.BlockingFetchQueues;
 
 /**
- * Creates {@link WeakSoftCache}s that share a finalize-queue.
+ * Creates Reference caches that share a finalize-queue.
  *
  *
  * @author Tobias Pietzsch &lt;tobias.pietzsch@gmail.com&gt;
@@ -42,5 +41,10 @@ public class RefCacheFactory
 				fetchQueue,
 				newSoftRefCache(),
 				cacheHints );
+	}
+
+	public void cleanUp()
+	{
+		sharedQueue.cleanUp();
 	}
 }
