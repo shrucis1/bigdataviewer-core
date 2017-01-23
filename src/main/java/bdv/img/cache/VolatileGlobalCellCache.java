@@ -252,6 +252,7 @@ public class VolatileGlobalCellCache implements CacheControl
 			}
 		}
 
+		// TODO FIXME This doesn't have any effect! because we added it to ImgKey etc. It doesn't work like this!!!
 		@Override
 		public void setCacheHints( final CacheHints cacheHints )
 		{
