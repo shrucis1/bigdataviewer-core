@@ -33,12 +33,12 @@ public class WeakSoftCacheFinalizeQueue
 		}
 	}
 
-	public < K, V > Reference< V > createSoftReference( final K key, final V referent, final Map< K, Reference< V > > cache )
+	public < K, V > SoftReference< V > createSoftReference( final K key, final V referent, final Map< K, Reference< V > > cache )
 	{
 		return new CacheSoftReference< >( key, referent, cache, finalizeQueue );
 	}
 
-	public < K, V > Reference< V > createWeakReference( final K key, final V referent, final Map< K, Reference< V > > cache )
+	public < K, V > WeakReference< V > createWeakReference( final K key, final V referent, final Map< K, Reference< V > > cache )
 	{
 		return new CacheWeakReference<>( key, referent, cache, finalizeQueue );
 	}
