@@ -35,7 +35,6 @@ import java.util.concurrent.ExecutionException;
 
 import bdv.cache.CacheControl;
 import bdv.cache.CacheHints;
-import bdv.cache.VolatileCacheValueLoader;
 import bdv.cache.WeakSoftCache;
 import bdv.cache.guavaapi.RefCacheFactory;
 import bdv.cache.guavaapi.VolatileLoader;
@@ -43,6 +42,9 @@ import bdv.cache.guavaapi.WeakRefVolatileCache;
 import bdv.cache.util.BlockingFetchQueues;
 import bdv.cache.util.FetcherThreads;
 import bdv.img.cache.VolatileImgCells.CellCache;
+import bdv.img.cache.loading.VolatileArrayLoader;
+import bdv.img.cache.loading.VolatileCacheLoader;
+import bdv.img.cache.loading.VolatileCellVolatileCacheLoader;
 import net.imglib2.img.basictypeaccess.volatiles.VolatileAccess;
 import net.imglib2.img.cell.CellImg;
 
@@ -215,35 +217,59 @@ public class VolatileGlobalCellCache implements CacheControl
 
 		private final WeakRefVolatileCache< Long, VolatileCell< A > > volatileCache;
 
-		private final CacheArrayLoader< A > cacheArrayLoader;
+		private final VolatileCacheLoader< Long, VolatileCell< A > > cacheLoader;
 
 		public VolatileCellCache(
 				final int timepoint,
 				final int setup,
 				final int level,
 				final CacheHints cacheHints,
-				final CacheArrayLoader< A > cacheArrayLoader )
+				final CacheArrayLoader< A > cacheArrayLoader,
+				final long[] dimensions,
+				final int[] cellDimensions )
 		{
 			this.timepoint = timepoint;
 			this.setup = setup;
 			this.level = level;
-			this.cacheArrayLoader = cacheArrayLoader;
 			volatileCache = getImageCache( new ImgKey( timepoint, setup, level, cacheHints ) );
+			cacheLoader = new VolatileCellVolatileCacheLoader<>(
+					new VolatileArrayLoader< A >()
+					{
+						@Override
+						public A loadArray( final int[] dimensions, final long[] min ) throws InterruptedException
+						{
+							return cacheArrayLoader.loadArray( timepoint, setup, level, dimensions, min );
+						}
+
+						@Override
+						public A emptyArray( final int[] dimensions )
+						{
+							return cacheArrayLoader.emptyArray( cellDimensions );
+						}
+					},
+					dimensions,
+					cellDimensions );
 		}
 
 		@Override
 		public VolatileCell< A > get( final long index )
 		{
-			return volatileCache.getIfPresent( index );
-		}
-
-		@Override
-		public VolatileCell< A > load( final long index, final int[] cellDims, final long[] cellMin )
-		{
-			final VolatileCellLoader loader = new VolatileCellLoader( cellDims, cellMin );
 			try
 			{
-				return volatileCache.get( index, loader );
+				return volatileCache.get( index, new VolatileLoader< VolatileCell< A > >()
+				{
+					@Override
+					public VolatileCell< A > call() throws Exception
+					{
+						return cacheLoader.load( index );
+					}
+
+					@Override
+					public VolatileCell< A > createEmptyValue()
+					{
+						return cacheLoader.createEmpty( index );
+					}
+				} );
 			}
 			catch ( final ExecutionException e )
 			{
@@ -257,44 +283,6 @@ public class VolatileGlobalCellCache implements CacheControl
 		public void setCacheHints( final CacheHints cacheHints )
 		{
 			this.cacheHints = cacheHints;
-		}
-
-		/**
-		 * A {@link VolatileCacheValueLoader} for one specific {@link VolatileCell}.
-		 */
-		private class VolatileCellLoader implements VolatileLoader< VolatileCell< A > >
-		{
-			private final int[] cellDims;
-
-			private final long[] cellMin;
-
-			/**
-			 * Create a loader for a specific cell.
-			 *
-			 * @param cellDims
-			 *            dimensions of the cell in pixels
-			 * @param cellMin
-			 *            minimum spatial coordinates of the cell in pixels
-			 */
-			public VolatileCellLoader(
-					final int[] cellDims,
-					final long[] cellMin )
-			{
-				this.cellDims = cellDims;
-				this.cellMin = cellMin;
-			}
-
-			@Override
-			public VolatileCell< A > createEmptyValue()
-			{
-				return new VolatileCell<>( cellDims, cellMin, cacheArrayLoader.emptyArray( cellDims ) );
-			}
-
-			@Override
-			public VolatileCell< A > call() throws Exception
-			{
-				return new VolatileCell<>( cellDims, cellMin, cacheArrayLoader.loadArray( timepoint, setup, level, cellDims, cellMin ) );
-			}
 		}
 	}
 }

@@ -152,7 +152,7 @@ public class ImarisImageLoader< T extends NativeType< T >, V extends Volatile< T
 
 		final int priority = mipmapInfo.getMaxLevel() - level;
 		final CacheHints cacheHints = new CacheHints( loadingStrategy, priority, false );
-		final CellCache< A > c = cache.new VolatileCellCache<>( timepointId, setupId, level, cacheHints, loader );
+		final CellCache< A > c = cache.new VolatileCellCache<>( timepointId, setupId, level, cacheHints, loader, dimensions, cellDimensions );
 		final VolatileImgCells< A > cells = new VolatileImgCells<>( c, new Fraction(), dimensions, cellDimensions );
 		final CachedCellImg< T, A > img = new CachedCellImg<>( cells );
 		return img;

@@ -262,7 +262,7 @@ public class OpenConnectomeImageLoader extends AbstractViewerSetupImgLoader< Uns
 
 		final int priority = numScales - 1 - level;
 		final CacheHints cacheHints = new CacheHints( loadingStrategy, priority, false );
-		final CellCache< VolatileByteArray > c = cache.new VolatileCellCache<>( timepointId, setupId, level, cacheHints, loader );
+		final CellCache< VolatileByteArray > c = cache.new VolatileCellCache<>( timepointId, setupId, level, cacheHints, loader, dimensions, cellDimensions );
 		final VolatileImgCells< VolatileByteArray > cells = new VolatileImgCells<>( c, new Fraction(), dimensions, cellDimensions );
 		final CachedCellImg< T, VolatileByteArray > img = new CachedCellImg<>( cells );
 		return img;

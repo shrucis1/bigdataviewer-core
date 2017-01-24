@@ -40,7 +40,6 @@ import net.imglib2.img.basictypeaccess.volatiles.VolatileAccess;
 import net.imglib2.img.cell.AbstractCells;
 import net.imglib2.img.list.AbstractLongListImg;
 import net.imglib2.util.Fraction;
-import net.imglib2.util.IntervalIndexer;
 
 public class VolatileImgCells< A extends VolatileAccess > extends AbstractCells< A, VolatileCell< A >, VolatileImgCells< A >.CachedCells >
 {
@@ -49,25 +48,15 @@ public class VolatileImgCells< A extends VolatileAccess > extends AbstractCells<
 		/**
 		 * Get the cell at a specified index.
 		 *
-		 * @return cell at index or null if the cell is not in the cache.
-		 */
-		public VolatileCell< A > get( final long index );
-
-		/**
-		 * Load a cell into memory (eventually) and put it into the cache at the
-		 * specified index. Depending on the implementation, loading may be
-		 * asynchronous, so the {@link VolatileAccess} of the returned cell may
-		 * be invalid for a while.
+		 * If the cell is not in the cache, load it into memory (eventually) and
+		 * put it into the cache at the specified index. Depending on the
+		 * implementation, loading may be asynchronous, so the
+		 * {@link VolatileAccess} of the returned cell may be invalid for a
+		 * while.
 		 *
-		 * @param index
-		 *            cell is stored at this index in the cache.
-		 * @param cellDims
-		 *            dimensions of the cell.
-		 * @param cellMin
-		 *            offset of the cell in image coordinates.
 		 * @return cell at index
 		 */
-		public VolatileCell< A > load( final long index, final int[] cellDims, final long[] cellMin );
+		public VolatileCell< A > get( final long index );
 
 		/**
 		 * Set {@link CacheHints hints} on how to handle cell requests for this
@@ -138,15 +127,7 @@ public class VolatileImgCells< A extends VolatileAccess > extends AbstractCells<
 		@Override
 		protected VolatileCell< A > get( final long index )
 		{
-			final VolatileCell< A > cell = cache.get( index );
-			if ( cell != null )
-				return cell;
-			final long[] cellGridPosition = new long[ n ];
-			final long[] cellMin = new long[ n ];
-			final int[] cellDims  = new int[ n ];
-			IntervalIndexer.indexToPosition( index, dimension, cellGridPosition );
-			getCellDimensions( cellGridPosition, cellMin, cellDims );
-			return cache.load( index, cellDims, cellMin );
+			return cache.get( index );
 		}
 
 		@Override
