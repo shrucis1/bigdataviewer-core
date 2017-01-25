@@ -6,6 +6,7 @@ import bdv.cache.CacheHints;
 import bdv.cache.VolatileCacheValue;
 import bdv.cache.WeakSoftCacheFinalizeQueue;
 import bdv.cache.util.BlockingFetchQueues;
+import bdv.img.cache.loading.VolatileCacheLoader;
 
 /**
  * Creates Reference caches that share a finalize-queue.
@@ -34,13 +35,15 @@ public class RefCacheFactory
 
 	public < K, V extends VolatileCacheValue > WeakRefVolatileCache< K, V > newWeakRefVolatileCache(
 			final BlockingFetchQueues< Callable< Void > > fetchQueue,
-			final CacheHints cacheHints )
+			final CacheHints cacheHints,
+			final VolatileCacheLoader< K, V > cacheLoader )
 	{
 		return new WeakRefVolatileCache< K, V >(
 				new WeakRefLocalCache<>( sharedQueue ),
 				fetchQueue,
 				newSoftRefCache(),
-				cacheHints );
+				cacheHints,
+				cacheLoader );
 	}
 
 	public void cleanUp()

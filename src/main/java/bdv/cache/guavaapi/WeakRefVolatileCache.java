@@ -7,7 +7,9 @@ import java.util.concurrent.ExecutionException;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheStats;
+import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.util.concurrent.UncheckedExecutionException;
 
 import bdv.cache.CacheHints;
 import bdv.cache.LoadingStrategy;
@@ -16,8 +18,9 @@ import bdv.cache.iotiming.CacheIoTiming;
 import bdv.cache.iotiming.IoStatistics;
 import bdv.cache.iotiming.IoTimeBudget;
 import bdv.cache.util.BlockingFetchQueues;
+import bdv.img.cache.loading.VolatileCacheLoader;
 
-public class WeakRefVolatileCache< K, V extends VolatileCacheValue > implements Cache< K, V >
+public class WeakRefVolatileCache< K, V extends VolatileCacheValue > implements LoadingCache< K, V >
 {
 	WeakRefLocalCache< K, Entry > entryCache;
 
@@ -27,15 +30,12 @@ public class WeakRefVolatileCache< K, V extends VolatileCacheValue > implements 
 
 		private V value;
 
-		private Callable< ? extends V > loader;
-
 		private long enqueueFrame;
 
-		public Entry( final K key, final VolatileLoader< ? extends V > loader )
+		public Entry( final K key )
 		{
 			this.key = key;
-			this.value = loader.createEmptyValue();
-			this.loader = loader;
+			this.value = cacheLoader.createEmpty( key );
 			enqueueFrame = -1;
 		}
 
@@ -43,10 +43,9 @@ public class WeakRefVolatileCache< K, V extends VolatileCacheValue > implements 
 		{
 			synchronized ( this )
 			{
-				if ( loader != null )
+				if ( ! value.isValid() )
 				{
-					value = softRefCache.get( key, loader );
-					loader = null;
+					value = softRefCache.get( key, () -> cacheLoader.load( key ) );
 					enqueueFrame = Long.MAX_VALUE;
 				}
 				notifyAll();
@@ -80,6 +79,8 @@ public class WeakRefVolatileCache< K, V extends VolatileCacheValue > implements 
 
 	private final BlockingFetchQueues< Callable< Void > > queue;
 
+	private final VolatileCacheLoader< K, V > cacheLoader;
+
 	final LoadingStrategy loadingStrategy;
 
 	final int priority;
@@ -90,11 +91,13 @@ public class WeakRefVolatileCache< K, V extends VolatileCacheValue > implements 
 			final WeakRefLocalCache< K, Entry > entryCache,
 			final BlockingFetchQueues< Callable< Void > > fetchQueue,
 			final Cache< K, V > validCache,
-			final CacheHints cacheHints )
+			final CacheHints cacheHints,
+			final VolatileCacheLoader< K, V > cacheLoader )
 	{
 		this.entryCache = entryCache;
 		this.queue = fetchQueue;
 		this.softRefCache = validCache;
+		this.cacheLoader = cacheLoader;
 		loadingStrategy = cacheHints.getLoadingStrategy();
 		priority = cacheHints.getQueuePriority();
 		enqueuToFront = cacheHints.isEnqueuToFront();
@@ -128,19 +131,8 @@ public class WeakRefVolatileCache< K, V extends VolatileCacheValue > implements 
 		return null;
 	}
 
-	@Override
-	public V get( final K key, final Callable< ? extends V > loader ) throws ExecutionException
+	protected Entry getEntry( final K key )
 	{
-		// TODO Auto-generated method stub
-		throw new UnsupportedOperationException( "this is implemented alternatively with VolatileLoader. TODO");
-	}
-
-	public V get( final K key, final VolatileLoader< ? extends V > loader ) throws ExecutionException
-	{
-		final V v = softRefCache.getIfPresent( key );
-		if ( v != null )
-			return v;
-
 		Entry entry = entryCache.get( key );
 		if ( entry == null )
 		{
@@ -149,16 +141,19 @@ public class WeakRefVolatileCache< K, V extends VolatileCacheValue > implements 
 				entry = entryCache.get( key );
 				if ( entry == null )
 				{
-					entry = new Entry( key, loader );
+					entry = new Entry( key );
 					entryCache.put( key, entry );
 				}
 			}
 		}
+		return entry;
+	}
 
-		if ( !entry.getValue().isValid() )
-			loadEntryWithCacheHints( entry );
-
-		return entry.getValue();
+	@Override
+	public V get( final K key, final Callable< ? extends V > loader ) throws ExecutionException
+	{
+		// TODO Auto-generated method stub
+		throw new UnsupportedOperationException( "this is implemented alternatively with VolatileLoader. TODO");
 	}
 
 	private void loadEntryWithCacheHints( final Entry entry ) throws ExecutionException
@@ -317,5 +312,53 @@ public class WeakRefVolatileCache< K, V extends VolatileCacheValue > implements 
 	{
 		entryCache.cleanUp();
 		softRefCache.cleanUp();
+	}
+
+	@Override
+	public V get( final K key ) throws ExecutionException
+	{
+		final V v = softRefCache.getIfPresent( key );
+		if ( v != null )
+			return v;
+
+		final Entry entry = getEntry( key );
+		if ( !entry.getValue().isValid() )
+			loadEntryWithCacheHints( entry );
+
+		return entry.getValue();
+	}
+
+	@Override
+	public V getUnchecked( final K key )
+	{
+		try
+		{
+			return get( key );
+		}
+		catch ( final ExecutionException e )
+		{
+			throw new UncheckedExecutionException( e.getCause() );
+		}
+	}
+
+	@Override
+	public ImmutableMap< K, V > getAll( final Iterable< ? extends K > keys ) throws ExecutionException
+	{
+		// TODO Auto-generated method stub
+		throw new UnsupportedOperationException( "not implemented yet");
+	}
+
+	@Override
+	public V apply( final K key )
+	{
+		// TODO Auto-generated method stub
+		throw new UnsupportedOperationException( "not implemented yet");
+	}
+
+	@Override
+	public void refresh( final K key )
+	{
+		// TODO Auto-generated method stub
+		throw new UnsupportedOperationException( "not implemented yet");
 	}
 }

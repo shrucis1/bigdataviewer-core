@@ -37,7 +37,6 @@ import bdv.cache.CacheControl;
 import bdv.cache.CacheHints;
 import bdv.cache.WeakSoftCache;
 import bdv.cache.guavaapi.RefCacheFactory;
-import bdv.cache.guavaapi.VolatileLoader;
 import bdv.cache.guavaapi.WeakRefVolatileCache;
 import bdv.cache.util.BlockingFetchQueues;
 import bdv.cache.util.FetcherThreads;
@@ -58,8 +57,6 @@ public class VolatileGlobalCellCache implements CacheControl
 
 		private final int level;
 
-		private final CacheHints cacheHints;
-
 		/**
 		 * Create a Key for the specified image.
 		 *
@@ -69,20 +66,16 @@ public class VolatileGlobalCellCache implements CacheControl
 		 *            setup coordinate of the image.
 		 * @param level
 		 *            level coordinate of the image.
-		 * @param cacheHints
-		 *            cache hints for the image.
 		 */
-		public ImgKey( final int timepoint, final int setup, final int level, final CacheHints cacheHints )
+		public ImgKey( final int timepoint, final int setup, final int level )
 		{
 			this.timepoint = timepoint;
 			this.setup = setup;
 			this.level = level;
-			this.cacheHints = cacheHints;
 
 			int value = Long.hashCode( level );
 			value = 31 * value + setup;
 			value = 31 * value + timepoint;
-			value = 31 * value + cacheHints.hashCode();
 			hashcode = value;
 		}
 
@@ -183,7 +176,10 @@ public class VolatileGlobalCellCache implements CacheControl
 //		return volatileCache;
 //	}
 
-	< A extends VolatileAccess > WeakRefVolatileCache< Long, VolatileCell< A > > getImageCache( final ImgKey key )
+	< A extends VolatileAccess > WeakRefVolatileCache< Long, VolatileCell< A > > getImageCache(
+			final ImgKey key,
+			final CacheHints TODO_FIXME,
+			final VolatileCacheLoader< Long, VolatileCell< A > > cacheLoader )
 	{
 		synchronized ( imgCaches )
 		{
@@ -191,7 +187,7 @@ public class VolatileGlobalCellCache implements CacheControl
 			WeakRefVolatileCache< Long, VolatileCell< A > > cache = ( WeakRefVolatileCache< Long, VolatileCell< A > > ) imgCaches.get( key );
 			if ( cache == null )
 			{
-				cache = cacheFactory.newWeakRefVolatileCache( queue, key.cacheHints );
+				cache = cacheFactory.newWeakRefVolatileCache( queue, TODO_FIXME, cacheLoader );
 				imgCaches.put( key, cache );
 			}
 			return cache;
@@ -231,7 +227,6 @@ public class VolatileGlobalCellCache implements CacheControl
 			this.timepoint = timepoint;
 			this.setup = setup;
 			this.level = level;
-			volatileCache = getImageCache( new ImgKey( timepoint, setup, level, cacheHints ) );
 			cacheLoader = new VolatileCellVolatileCacheLoader<>(
 					new VolatileArrayLoader< A >()
 					{
@@ -249,6 +244,7 @@ public class VolatileGlobalCellCache implements CacheControl
 					},
 					dimensions,
 					cellDimensions );
+			volatileCache = getImageCache( new ImgKey( timepoint, setup, level ), cacheHints, cacheLoader );
 		}
 
 		@Override
@@ -256,20 +252,7 @@ public class VolatileGlobalCellCache implements CacheControl
 		{
 			try
 			{
-				return volatileCache.get( index, new VolatileLoader< VolatileCell< A > >()
-				{
-					@Override
-					public VolatileCell< A > call() throws Exception
-					{
-						return cacheLoader.load( index );
-					}
-
-					@Override
-					public VolatileCell< A > createEmptyValue()
-					{
-						return cacheLoader.createEmpty( index );
-					}
-				} );
+				return volatileCache.get( index );
 			}
 			catch ( final ExecutionException e )
 			{
